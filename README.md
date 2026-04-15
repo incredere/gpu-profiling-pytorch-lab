@@ -1,10 +1,18 @@
 # GPU Profiling using PyTorch Profiler and Perfetto
 
+[Open Notebook in Colab](https://colab.research.google.com/github/incredere/gpu-profiling-pytorch-lab/blob/main/gpu_profiling_lab.ipynb)
+
+---
+
 ## Overview
 
-This project demonstrates hands-on GPU profiling of a deep learning training workload using PyTorch Profiler.
+This project demonstrates hands-on GPU profiling of a deep learning training workload using **PyTorch Profiler** and **Perfetto**.
 
-The objective is to understand how machine learning models utilize GPU compute resources and identify performance bottlenecks using trace-based profiling tools.
+The objective of this lab is to understand how machine learning models utilize GPU compute resources and identify performance bottlenecks using trace-based profiling tools.
+
+This project was executed using **Google Colab GPU environment**.
+
+---
 
 ## Tools Used
 
@@ -15,66 +23,68 @@ The objective is to understand how machine learning models utilize GPU compute r
 - Perfetto Trace Viewer
 - nvidia-smi
 
+---
+
 ## Workflow
 
 1. Train neural network on GPU
-2. Capture execution trace using torch.profiler
-3. Export trace file (.pt.trace.json)
-4. Visualize GPU timeline using Perfetto
-5. Analyze performance bottlenecks
+2. Capture profiler traces using torch.profiler
+3. Generate profiling trace file (.pt.trace.json)
+4. Visualize execution timeline using Perfetto UI
+5. Analyze compute bottlenecks and GPU utilization
 
-## Model
+---
 
-Simple feedforward neural network trained on FashionMNIST dataset.
+## Model Used
 
-## Profiling Observations
+Feedforward neural network trained on **FashionMNIST dataset**.
 
-- Forward pass uses matrix multiplication operations (aten::linear)
-- Backward pass takes higher compute time
-- GPU utilized consistently during training steps
-- CPU to GPU transfer latency minimal
-- Optimizer step visible in timeline
+Architecture:
+
+Input → Linear (1024) → ReLU → Linear (512) → ReLU → Output layer (10 classes)
+
+---
+
+## What was analyzed
+
+- Forward pass compute time
+- Backward pass compute time
+- Optimizer step timing
+- CPU to GPU data transfer latency
+- GPU kernel execution timeline
+- Operator level performance (example: aten::linear)
+- GPU utilization patterns
+
+---
+
+## Key Observations
+
+- Matrix multiplication operations (aten::linear) consumed majority of compute time
+- Backward pass required more compute time compared to forward pass
+- GPU utilization remained consistent during training steps
+- CPU to GPU data transfer latency was minimal
+- Profiler traces show execution spans for forward, backward, and optimization steps
+
+---
 
 ## Screenshots
 
 ### GPU Information
-![GPU](./images/gpu_info.png)
 
-### Perfetto Timeline
-![Perfetto](./images/perfetto_trace.png)
+![GPU](images/gpu_info.png)
 
-### Profiler Output
-![Profiler](./images/profiler_output.png)
+---
 
-## Project Structure
+### Perfetto Timeline Visualization
 
-```
-gpu-profiling-pytorch-lab
-│
-├── gpu_profiling_lab.ipynb
-├── profile_script.py
-├── requirements.txt
-└── images
-```
+![Perfetto](images/perfetto_trace.png)
 
-## Future Improvements
+---
 
-- mixed precision profiling
-- larger model profiling
-- multi-GPU profiling
-- TPU profiling
-- distributed training performance analysis
+### Profiler Output Summary
 
-## Key Learning
+![Profiler](images/profiler_output.png)
 
-GPU profiling helps identify compute bottlenecks in ML workloads and improves training efficiency by optimizing batch size, memory usage, and kernel execution patterns.
+---
 
-## Image layout and helper script
-
-PNG images used by notebooks and the README are stored in the `images/` directory at the repository root. If you find PNG files in the repository root, you can run the included helper script to move them safely into `images/`.
-
-To run the script from PowerShell:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\fix-images.ps1
-```
+## Repository Structure
