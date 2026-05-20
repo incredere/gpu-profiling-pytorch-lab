@@ -48,7 +48,7 @@ Computed from the model architecture (B=8, S=128, D=512, 6 layers) and the kerne
 
 **Elementwise — catastrophically memory-bound at 0.03% of peak.** Two reads + one write per FLOP. Same fix as LayerNorm: fusion. PyTorch 2's `torch.compile` does this automatically via the inductor backend.
 
-## The interview-ready summary
+## Summary
 
 > On T4 with this GPT-2 config, matmuls are compute-bound and would benefit most from Tensor Cores (mixed precision). Attention sits near the ridge — its bottleneck depends on sequence length. LayerNorm and elementwise ops are memory-bound and benefit from kernel fusion, not faster math. As compute scales (Volta → Hopper → Blackwell), the memory ridge moves up, so more ops become memory-bound — which is why every new GPU generation also ships with more memory bandwidth.
 
@@ -65,15 +65,3 @@ This lab is **pure analysis** — no GPU needed. The notebook reuses the kernel 
 - `kernel_roofline_analysis.ipynb` — the analysis notebook (with full derivation and roofline plot)
 - `roofline_plot.png` — generated roofline visualization
 - `README.md` — this document
-
-## What you'll learn (interview answers you'll be able to give)
-
-1. **Why is attention typically memory-bound at small sequence lengths?** It reads/writes large tensors but does relatively few FLOPs per byte.
-
-2. **Why are FFN matmuls compute-bound?** FLOPs grow as O(M·N·K) but memory access grows as O(M·N + N·K + M·K). At reasonable sizes the ratio is high enough to saturate the math units.
-
-3. **Why is LayerNorm slow?** Not because the code is inefficient — it's inherently bandwidth-bound (1 FLOP/byte). The only optimization is fusion.
-
-4. **What's a roofline plot?** A 2D plot of arithmetic intensity vs achieved performance, with the GPU's compute and memory bandwidth limits as a "roof" — lets you see at a glance whether each kernel is compute-bound, memory-bound, or under-utilizing the GPU.
-
-5. **Why does each new GPU generation add memory bandwidth?** Because as compute speeds up faster than bandwidth, more operations become memory-bound. Without bandwidth growth, the new compute would be wasted.
