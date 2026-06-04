@@ -1,11 +1,9 @@
 # ML Accelerator Profiling Labs
 
-Hands-on GPU profiling labs using PyTorch Profiler, mixed precision benchmarking,
-and Perfetto trace analysis. Built to develop practical GPU performance engineering
-skills on real training workloads.
+Hands-on GPU profiling labs using PyTorch Profiler, mixed precision benchmarking, and Perfetto trace analysis. Built to develop practical GPU performance engineering skills on real training workloads.
 
 **Author:** Vishwas Somashekara Reddy
-**Stack:** PyTorch · PyTorch Profiler · Perfetto · Google Colab · NVIDIA CUDA
+**Stack:** PyTorch · PyTorch Profiler · Perfetto · Google Colab · Kaggle · NVIDIA CUDA
 
 ---
 
@@ -27,6 +25,10 @@ skills on real training workloads.
 | Level 4 | GPT-2 style (6L, d=512, 8h) | T4 (Colab) | Attention QK^T AI / achieved | 16 FLOPs/byte → 0.40 TFLOPS (memory-bound) |
 | Level 4 | GPT-2 style (6L, d=512, 8h) | T4 (Colab) | LayerNorm AI / achieved | 1 FLOP/byte → 0.11 TFLOPS (memory-bound) |
 | Level 4 | GPT-2 style (6L, d=512, 8h) | T4 (Colab) | Elementwise AI / achieved | 0.08 FLOP/byte → 0.003 TFLOPS (memory-bound) |
+| Level 5 | GPT-2 style (DDP 2x T4) | 2x T4 (Kaggle) | NCCL % of GPU time | **44.1%** |
+| Level 5 | GPT-2 style (DDP 2x T4) | 2x T4 (Kaggle) | Compute-comm overlap | 47.2% |
+| Level 5 | GPT-2 style (DDP 2x T4) | 2x T4 (Kaggle) | Scaling efficiency | **68.0%** |
+| Level 5 | GPT-2 style (DDP 2x T4) | 2x T4 (Kaggle) | Effective throughput | **1.36x** (ideal: 2.0x) |
 
 > CUDA-only speedup in Level 2 (2.08x) is higher than wallclock speedup (1.37x) because CPU overhead and data loading are constant across both runs. The GPU kernel efficiency gain from AMP is the real story.
 >
@@ -106,12 +108,32 @@ skills on real training workloads.
 
 ---
 
+### Level 5 — Distributed training profiling (DDP on 2x T4)
+
+**Goal:** Profile a real DDP training run and measure the cost of GPU-to-GPU gradient synchronization. Answer the question: when you add a second GPU, how much of the speedup do you actually get?
+
+- Same GPT-2 model from Level 3, profiled on single GPU (baseline) vs DDP on 2x T4
+- Separates compute time from NCCL AllReduce communication time
+- Measures gradient bucketing overlap and scaling efficiency
+- 76 MB of gradient data AllReduced per step (~5.4 NCCL calls matching 25 MB default bucket size)
+
+**Key findings:**
+
+- **NCCL communication consumes 44.1% of GPU time.** On PCIe-connected T4s without NVLink, gradient sync is the dominant cost for a 19M-param model.
+- **Gradient bucketing achieves 47% compute-communication overlap.** Without overlap, DDP would take 104.5 ms/step. With DDP's bucketed AllReduce, actual step time is 81.25 ms — overlap saved 23.25 ms per step.
+- **Scaling efficiency is 68% — 2 GPUs give 1.36x throughput, not 2x.** The compute-to-communication ratio is only 1.3:1 at this model size. For efficient scaling you want >10:1.
+- **At 7B+ parameters, scaling efficiency climbs above 90%.** Compute grows as O(params × tokens) while AllReduce grows as O(params). This is why distributed training only makes economic sense at scale.
+
+📁 [`Level5_distributed_training/`](./Level5_distributed_training)
+
+---
+
 ## How to run
 
-All labs run on **Google Colab** (free T4 GPU). No local setup needed.
+All labs run on **Google Colab** (free T4 GPU) or **Kaggle** (free 2x T4 for Level 5). No local setup needed.
 
 1. Open the `.ipynb` notebook in the relevant folder
-2. Click **Runtime → Change runtime type → T4 GPU**
+2. Click **Runtime → Change runtime type → T4 GPU** (or GPU T4 x2 on Kaggle for Level 5)
 3. Run all cells
 4. Download the `.pt.trace.json` output
 5. Open [Perfetto UI](https://ui.perfetto.dev) and drag in the trace file to visualize the GPU timeline
@@ -122,7 +144,6 @@ All labs run on **Google Colab** (free T4 GPU). No local setup needed.
 
 | Lab | Topic | Status |
 | --- | --- | --- |
-| Level 5 | Distributed training — DDP communication vs compute overlap on 2x GPU | Planned |
 | Level 6 | Inference profiling — vLLM TTFT vs throughput, KV cache scaling | Planned |
 
 ---
@@ -134,5 +155,7 @@ All labs run on **Google Colab** (free T4 GPU). No local setup needed.
 | PyTorch Profiler | Capturing CPU + CUDA execution traces |
 | Perfetto | Visualizing GPU execution timelines |
 | PyTorch AMP | Mixed precision training (FP16/FP32) |
+| NCCL | GPU-to-GPU communication for DDP |
 | Google Colab | Free T4 GPU environment |
+| Kaggle | Free 2x T4 GPU environment |
 | nvidia-smi | GPU hardware validation |
