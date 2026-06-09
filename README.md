@@ -29,10 +29,17 @@ Hands-on GPU profiling labs using PyTorch Profiler, mixed precision benchmarking
 | Level 5 | GPT-2 style (DDP 2x T4) | 2x T4 (Kaggle) | Compute-comm overlap | 47.2% |
 | Level 5 | GPT-2 style (DDP 2x T4) | 2x T4 (Kaggle) | Scaling efficiency | **68.0%** |
 | Level 5 | GPT-2 style (DDP 2x T4) | 2x T4 (Kaggle) | Effective throughput | **1.36x** (ideal: 2.0x) |
+| Level 6 | TinyLlama-1.1B (inference) | T4 (Kaggle) | Prefill (TTFT), 14-token prompt | ~35 ms |
+| Level 6 | TinyLlama-1.1B (inference) | T4 (Kaggle) | Decode (TBT), batch=1 | ~33.5 ms |
+| Level 6 | TinyLlama-1.1B (inference) | T4 (Kaggle) | Decode throughput (batch=1) | **~29 tok/s** |
+| Level 6 | TinyLlama-1.1B (inference) | T4 (Kaggle) | Decode arithmetic intensity | 1.0 FLOPs/byte (**memory-bound**) |
+| Level 6 | TinyLlama-1.1B (inference) | T4 (Kaggle) | Memory bandwidth utilization | ~20% |
 
 > CUDA-only speedup in Level 2 (2.08x) is higher than wallclock speedup (1.37x) because CPU overhead and data loading are constant across both runs. The GPU kernel efficiency gain from AMP is the real story.
 >
 > In Level 3, matmul dominates GPU time at short sequence lengths — "attention is the bottleneck" is a long-context story. The O(T²) attention term only catches the O(T·d²) linear term at much longer sequences than we used here (seq_len=128).
+>
+> In Level 6, batch=1 decode achieves only ~20% of T4's memory bandwidth. Arithmetic intensity is 1.0 FLOP/byte — 200x below the FP16 ridge point. This is why production serving systems use continuous batching.
 
 ---
 
@@ -128,6 +135,27 @@ Hands-on GPU profiling labs using PyTorch Profiler, mixed precision benchmarking
 
 ---
 
+### Level 6 — Inference profiling (TinyLlama-1.1B on T4)
+
+**Goal:** Profile LLM inference end-to-end, separating the two phases every autoregressive model goes through — prefill (compute-bound) vs decode (memory-bandwidth-bound) — and measuring where time and memory actually go.
+
+- TinyLlama-1.1B-Chat in FP16 on Tesla T4
+- Manually separates prefill and decode to measure TTFT and TBT independently
+- Measures prefill scaling (16–512 tokens), decode TBT vs KV cache length (32–1024 tokens)
+- Profiles `model.generate()` with `torch.profiler` and exports a Kineto trace
+- Computes KV cache memory scaling (measured vs theoretical) and decode roofline analysis
+
+**Key findings:**
+
+- **Prefill is compute-bound, decode is memory-bound.** Prefill processes all prompt tokens in parallel through large matmuls. Decode loads the entire 2.2 GB weight matrix for each single output token — throughput is gated by HBM bandwidth, not compute.
+- **Decode arithmetic intensity is ~1 FLOP/byte — 200x below the T4 FP16 ridge point (203).** Batch=1 decode achieves only ~20% of T4's memory bandwidth (~29 tok/s measured vs ~145 tok/s theoretical max).
+- **KV cache scales linearly at ~22 KB/token.** TinyLlama uses GQA with 4 KV heads (vs 32 attention heads), keeping the cache compact. At 2048 tokens the cache uses ~45 MB.
+- **Decode TBT is roughly constant (~33–35 ms) across KV cache sizes up to 1024.** At this model size, weight loading dominates; KV cache read cost only becomes significant at much longer contexts.
+
+📁 [`Level6_inference_profiling/`](./Level6_inference_profiling)
+
+---
+
 ## How to run
 
 All labs run on **Google Colab** (free T4 GPU) or **Kaggle** (free 2x T4 for Level 5). No local setup needed.
@@ -137,14 +165,6 @@ All labs run on **Google Colab** (free T4 GPU) or **Kaggle** (free 2x T4 for Lev
 3. Run all cells
 4. Download the `.pt.trace.json` output
 5. Open [Perfetto UI](https://ui.perfetto.dev) and drag in the trace file to visualize the GPU timeline
-
----
-
-## What's next
-
-| Lab | Topic | Status |
-| --- | --- | --- |
-| Level 6 | Inference profiling — vLLM TTFT vs throughput, KV cache scaling | Planned |
 
 ---
 
